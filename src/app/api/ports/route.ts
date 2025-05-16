@@ -1,27 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/firebase-admin";
+import { getFirebaseUser } from "@/lib/auth-helpers";
 
 // GET - List all ports for the authenticated user
 export async function GET(req: NextRequest) {
   try {
-    // Get the token and extract user ID
-    const token = await getToken({ req });
+    // Get the authenticated user
+    const user = await getFirebaseUser(req);
     
-    if (!token?.sub) {
+    if (!user?.uid) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const userId = token.sub;
+    const userId = user.uid;
 
-    // Get all ports for the user
-    const ports = await prisma.port.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' }
-    });
+    // Get all ports for the user from Firestore
+    const portsSnapshot = await db
+      .collection('ports')
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .get();
+    
+    const ports = portsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
 
     return NextResponse.json({ ports });
   } catch (error) {
@@ -36,17 +42,17 @@ export async function GET(req: NextRequest) {
 // POST - Create a new port for the authenticated user
 export async function POST(req: NextRequest) {
   try {
-    // Get the token and extract user ID
-    const token = await getToken({ req });
+    // Get the authenticated user
+    const user = await getFirebaseUser(req);
     
-    if (!token?.sub) {
+    if (!user?.uid) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const userId = token.sub;
+    const userId = user.uid;
     
     // Get request body
     const { name, portNumber, protocol, host, description } = await req.json();
@@ -67,17 +73,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create the port
-    const port = await prisma.port.create({
-      data: {
-        name,
-        portNumber,
-        protocol: protocol || "http",
-        host: host || "localhost",
-        description,
-        userId
-      }
-    });
+    // Create the port in Firestore
+    const portData = {
+      name,
+      portNumber,
+      protocol: protocol || "http",
+      host: host || "localhost",
+      description,
+      userId,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const portRef = await db.collection('ports').add(portData);
+    const port = { id: portRef.id, ...portData };
 
     return NextResponse.json({ port }, { status: 201 });
   } catch (error) {

@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/firebase-admin";
+import { getFirebaseUser } from "@/lib/auth-helpers";
+
+// Define port interface
+interface Port {
+  id: string;
+  name: string;
+  portNumber: number;
+  protocol: string;
+  host: string;
+  description?: string;
+  userId: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 // GET - Get a specific port by ID
 export async function GET(
@@ -10,30 +24,30 @@ export async function GET(
   try {
     const id = params.id;
     
-    // Get the token and extract user ID
-    const token = await getToken({ req });
+    // Get the authenticated user
+    const user = await getFirebaseUser(req);
     
-    if (!token?.sub) {
+    if (!user?.uid) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const userId = token.sub;
+    const userId = user.uid;
 
-    // Find the port
-    const port = await prisma.port.findUnique({
-      where: { id }
-    });
+    // Find the port in Firestore
+    const portDoc = await db.collection('ports').doc(id).get();
 
     // Check if port exists and belongs to the user
-    if (!port) {
+    if (!portDoc.exists) {
       return NextResponse.json(
         { error: "Port not found" },
         { status: 404 }
       );
     }
+
+    const port = { id: portDoc.id, ...portDoc.data() } as Port;
 
     if (port.userId !== userId) {
       return NextResponse.json(
@@ -60,30 +74,32 @@ export async function PUT(
   try {
     const id = params.id;
     
-    // Get the token and extract user ID
-    const token = await getToken({ req });
+    // Get the authenticated user
+    const user = await getFirebaseUser(req);
     
-    if (!token?.sub) {
+    if (!user?.uid) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const userId = token.sub;
+    const userId = user.uid;
 
     // Check if port exists and belongs to the user
-    const existingPort = await prisma.port.findUnique({
-      where: { id }
-    });
+    const portDoc = await db.collection('ports').doc(id).get();
 
-    if (!existingPort) {
+    // Check if port exists
+    if (!portDoc.exists) {
       return NextResponse.json(
         { error: "Port not found" },
         { status: 404 }
       );
     }
 
+    const existingPort = { id: portDoc.id, ...portDoc.data() } as Port;
+
+    // Check if port belongs to the user
     if (existingPort.userId !== userId) {
       return NextResponse.json(
         { error: "Unauthorized" },
@@ -102,18 +118,25 @@ export async function PUT(
       );
     }
 
-    // Update the port
-    const updatedPort = await prisma.port.update({
-      where: { id },
-      data: {
-        name: name !== undefined ? name : undefined,
-        portNumber: portNumber !== undefined ? portNumber : undefined,
-        protocol: protocol !== undefined ? protocol : undefined,
-        host: host !== undefined ? host : undefined,
-        description: description !== undefined ? description : undefined,
-        isActive: isActive !== undefined ? isActive : undefined,
-      }
-    });
+    // Prepare update data
+    const updateData: Partial<Port> = {
+      updatedAt: new Date().toISOString()
+    };
+
+    // Only include fields that are provided
+    if (name !== undefined) updateData.name = name;
+    if (portNumber !== undefined) updateData.portNumber = portNumber;
+    if (protocol !== undefined) updateData.protocol = protocol;
+    if (host !== undefined) updateData.host = host;
+    if (description !== undefined) updateData.description = description;
+    if (isActive !== undefined) updateData.isActive = isActive;
+
+    // Update the port in Firestore
+    await db.collection('ports').doc(id).update(updateData);
+
+    // Get the updated port
+    const updatedPortDoc = await db.collection('ports').doc(id).get();
+    const updatedPort = { id: updatedPortDoc.id, ...updatedPortDoc.data() } as Port;
 
     return NextResponse.json({ port: updatedPort });
   } catch (error) {
@@ -133,30 +156,32 @@ export async function DELETE(
   try {
     const id = params.id;
     
-    // Get the token and extract user ID
-    const token = await getToken({ req });
+    // Get the authenticated user
+    const user = await getFirebaseUser(req);
     
-    if (!token?.sub) {
+    if (!user?.uid) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const userId = token.sub;
+    const userId = user.uid;
 
     // Check if port exists and belongs to the user
-    const existingPort = await prisma.port.findUnique({
-      where: { id }
-    });
+    const portDoc = await db.collection('ports').doc(id).get();
 
-    if (!existingPort) {
+    // Check if port exists
+    if (!portDoc.exists) {
       return NextResponse.json(
         { error: "Port not found" },
         { status: 404 }
       );
     }
 
+    const existingPort = { id: portDoc.id, ...portDoc.data() } as Port;
+
+    // Check if port belongs to the user
     if (existingPort.userId !== userId) {
       return NextResponse.json(
         { error: "Unauthorized" },
@@ -164,10 +189,8 @@ export async function DELETE(
       );
     }
 
-    // Delete the port
-    await prisma.port.delete({
-      where: { id }
-    });
+    // Delete the port from Firestore
+    await db.collection('ports').doc(id).delete();
 
     return NextResponse.json(
       { message: "Port deleted successfully" },

@@ -14,7 +14,8 @@ export async function GET(
   { params }: { params: { user: string; port: string; id: string } }
 ) {
   try {
-    const { id } = params;
+    // Always await params in Next.js dynamic API routes
+    const id = await params.id;
     
     console.log(`Looking for chain with ID: ${id}`);
     
@@ -53,7 +54,8 @@ export async function POST(
   { params }: { params: { user: string; port: string; id: string } }
 ) {
   try {
-    const { id } = params;
+    // Always await params in Next.js dynamic API routes
+    const id = await params.id;
     
     console.log(`Processing chain with ID: ${id}`);
     

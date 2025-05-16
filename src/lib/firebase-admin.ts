@@ -9,19 +9,44 @@ if (!apps.length) {
     // Try to initialize with environment variables first
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    
+    // Private key handling - needs careful parsing of the environment variable
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+    
+    // Handle different formats that might be stored in the environment variable
+    if (privateKey) {
+      // Replace escaped newlines with actual newlines
+      privateKey = privateKey.replace(/\\n/g, '\n');
+      
+      // Remove any quotes that might be wrapping the key
+      if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+        privateKey = privateKey.slice(1, -1);
+      }
+    }
     
     // If all environment variables are available, use them
     if (projectId && clientEmail && privateKey) {
-      initializeApp({
-        credential: cert({
-          projectId,
-          clientEmail,
-          privateKey
-        })
-      });
-      console.log('Firebase Admin initialized with environment variables');
+      try {
+        initializeApp({
+          credential: cert({
+            projectId,
+            clientEmail,
+            privateKey
+          })
+        });
+        console.log('Firebase Admin initialized with environment variables');
+      } catch (certError) {
+        console.error('Certificate creation error:', certError);
+        throw certError;
+      }
     } else {
+      // Log missing variables
+      console.warn('Missing Firebase Admin credentials:', {
+        projectId: !!projectId,
+        clientEmail: !!clientEmail,
+        privateKey: !!privateKey
+      });
+      
       // Fallback to credential file if available
       initializeApp();
       console.log('Firebase Admin initialized with default credentials');
@@ -39,12 +64,13 @@ if (!apps.length) {
 }
 
 // Get Firestore instance
-export const adminDb = getFirestore();
+export const db = getFirestore();
+export const adminDb = db; // Keep for backwards compatibility
 
 // Helper function to create a chain document directly with admin privileges
 export async function createChainWithAdmin(userId: string, chainId: string, chainData: any) {
   try {
-    const ref = adminDb.collection('users').doc(userId).collection('chains').doc(chainId);
+    const ref = db.collection('users').doc(userId).collection('chains').doc(chainId);
     await ref.set(chainData);
     return true;
   } catch (error) {

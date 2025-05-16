@@ -35,7 +35,6 @@ export default function ChainProcessPage() {
   const [isTestProcessing, setIsTestProcessing] = useState(false);
   const [showEndpointModal, setShowEndpointModal] = useState(false);
   const [endpointUrl, setEndpointUrl] = useState('');
-  const [simplifiedApiUrl, setSimplifiedApiUrl] = useState('');
   const [compilingEndpoint, setCompilingEndpoint] = useState(false);
 
   // Check if API key is available on mount
@@ -314,7 +313,6 @@ export default function ChainProcessPage() {
           const simplifiedApiUrl = `${protocol}//${host}/api/process/${chainId}`;
           
           setEndpointUrl('Memory only - not persistent');
-          setSimplifiedApiUrl(simplifiedApiUrl);
           
           alert("Created memory-only chain due to Firebase permission issues. The chain will be lost when the server restarts.");
           
@@ -330,7 +328,6 @@ export default function ChainProcessPage() {
       
       const data = await response.json();
       setEndpointUrl(data.endpointUrl);
-      setSimplifiedApiUrl(data.simplifiedApiUrl);
       
       // Save chain data as JSON file
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -338,7 +335,6 @@ export default function ChainProcessPage() {
       const fullChainData = {
         chainId: data.id,
         endpointUrl: data.endpointUrl,
-        simplifiedApiUrl: data.simplifiedApiUrl,
         createdAt: new Date().toISOString(),
         userInfo: {
           email: userInfo.email,
@@ -680,11 +676,15 @@ export default function ChainProcessPage() {
             </p>
             
             <div className="mb-6">
-              <h3 className="font-medium text-[#382A22] mb-2 text-sm">Full Chain API:</h3>
+              <h3 className="font-medium text-[#382A22] mb-2 text-sm">API Endpoint URL:</h3>
               <div className="bg-[#F5F3ED] p-3 rounded-md mb-2 break-all">
                 <code className="text-sm font-mono text-[#382A22]">{endpointUrl}</code>
               </div>
-              <p className="text-xs text-[#8A6A52]">Provides full access to chain details and step results</p>
+              {endpointUrl && endpointUrl.includes('memory-only') && (
+                <div className="text-amber-600 text-xs mt-1 bg-amber-50 p-2 rounded border border-amber-100">
+                  ⚠️ This is a memory-only endpoint. It will not persist after server restart.
+                </div>
+              )}
             </div>
 
             <div className="mb-6">

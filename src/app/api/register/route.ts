@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hash } from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { auth } from "firebase-admin";
+import { db } from "@/lib/firebase-admin";
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,35 +15,49 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    });
-
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "User already exists" },
-        { status: 409 }
-      );
+    // Check if user already exists in Firebase
+    try {
+      const userRecord = await auth().getUserByEmail(email);
+      if (userRecord) {
+        return NextResponse.json(
+          { error: "User already exists" },
+          { status: 409 }
+        );
+      }
+    } catch (error: any) {
+      // If error code is auth/user-not-found, that's good - we continue
+      if (error.code !== 'auth/user-not-found') {
+        throw error;
+      }
     }
 
-    // Hash password
+    // Hash password for our own records (Firebase will handle its own hashing)
     const hashedPassword = await hash(password, 10);
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword
-      }
+    // Create user in Firebase Auth
+    const userRecord = await auth().createUser({
+      email,
+      password,
+      displayName: name,
     });
 
-    // Return user without password
-    const { password: _, ...userWithoutPassword } = user;
+    // Store additional user data in Firestore
+    await db.collection('users').doc(userRecord.uid).set({
+      name,
+      email,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
     
     return NextResponse.json(
-      { user: userWithoutPassword, message: "User created successfully" },
+      { 
+        user: {
+          id: userRecord.uid,
+          name: userRecord.displayName,
+          email: userRecord.email
+        }, 
+        message: "User created successfully" 
+      },
       { status: 201 }
     );
   } catch (error) {

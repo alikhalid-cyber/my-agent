@@ -51,6 +51,11 @@ export async function getChainById(id: string): Promise<DocumentData | null> {
     return null;
   } catch (error) {
     console.error('[Utils] Error retrieving chain:', error);
+    // Check if there's a fallback memory-only chain available
+    if (chainsStore[id]) {
+      console.log('[Utils] Using memory-only fallback for chain');
+      return chainsStore[id];
+    }
     return null;
   }
 }
@@ -79,12 +84,9 @@ export async function createChain(
   const userName = userInfo.displayName || userInfo.email?.split('@')[0] || 'user';
   const safeUserName = userName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
   
-  // Generate endpoint URLs
+  // Generate endpoint URL
   const protocol = host.includes('localhost') ? 'http' : 'https';
   const endpointUrl = `${protocol}://${host}/api/chains/${safeUserName}/${portNumber}/${chainId}`;
-  
-  // Generate simplified API URL
-  const simplifiedApiUrl = `${protocol}://${host}/api/process/${chainId}`;
   
   // Store chain data with the API key
   const chainDocData = {
@@ -94,7 +96,6 @@ export async function createChain(
     openAiApiKey: apiKey, // Store the API key with the chain data
     createdAt: new Date().toISOString(),
     endpointUrl: endpointUrl,
-    simplifiedApiUrl: simplifiedApiUrl,
     portNumber: portNumber,
     userName: safeUserName
   };
