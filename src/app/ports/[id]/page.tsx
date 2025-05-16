@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/providers/AuthProvider';
 
 interface Port {
   id: string;
@@ -18,7 +18,7 @@ interface Port {
 }
 
 export default function EditPortPage() {
-  const { data: session, status } = useSession();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
@@ -38,21 +38,27 @@ export default function EditPortPage() {
 
   // Check authentication
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!authLoading && !user) {
       router.push('/login');
     }
-  }, [status, router]);
+  }, [user, authLoading, router]);
 
   // Fetch port details
   useEffect(() => {
     const fetchPort = async () => {
-      if (status !== 'authenticated') return;
+      if (!user) return;
       
       try {
         setLoading(true);
         setError(null);
         
-        const response = await fetch(`/api/ports/${id}`);
+        const token = await user.getIdToken();
+        
+        const response = await fetch(`/api/ports/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         
         if (!response.ok) {
           if (response.status === 404) {
@@ -81,7 +87,7 @@ export default function EditPortPage() {
     };
 
     fetchPort();
-  }, [id, status, router]);
+  }, [id, user, router]);
 
   // Handle form input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -112,10 +118,13 @@ export default function EditPortPage() {
       setSaving(true);
       setError(null);
       
+      const token = await user?.getIdToken();
+      
       const response = await fetch(`/api/ports/${id}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(formData)
       });
@@ -135,7 +144,7 @@ export default function EditPortPage() {
   };
 
   // If loading or not authenticated yet
-  if (status === 'loading' || status === 'unauthenticated') {
+  if (authLoading || (loading && !user)) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
