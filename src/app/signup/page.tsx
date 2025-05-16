@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/providers/AuthProvider';
 
-export default function SignupPage() {
+function SignupForm() {
   const router = useRouter();
   const { signUpWithEmail } = useAuth();
   const [name, setName] = useState('');
@@ -167,5 +167,26 @@ export default function SignupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Loading fallback component
+function SignupLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 sm:px-6 lg:px-8 bg-[#EAE7DD]">
+      <div className="w-full max-w-md">
+        <div className="bg-white shadow-lg rounded-lg p-8 text-center">
+          <p className="text-[#7D5F4A]">Loading...</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<SignupLoading />}>
+      <SignupForm />
+    </Suspense>
   );
 } 
